@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistema de Tarefas</title>
+  <!-- Importa o CSS da aplicação -->
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+  <!-- Estrutura principal da página -->
+  <main class="container">
+    <header class="topbar">
+      <h1>📋 Sistema de Gerenciamento de Tarefas</h1>
+      <p class="subtitle">Organize suas tarefas de um jeito simples e visual.</p>
+    </header>
+
+    <div class="row">
+      <input id="descricao" type="text" placeholder="Digite uma nova tarefa" />
+      <button class="btn-add" id="btnAdicionar">Adicionar</button>
+    </div>
+
+    <section class="board">
+      <div class="column">
+        <div class="column-header">
+          <h2>Abertas</h2>
+          <span class="badge" id="pendentesBadge">0</span>
+        </div>
+        <ul id="listaPendentes"></ul>
+        <p class="empty" id="mensagemVaziaPendentes" hidden>Nenhuma tarefa aberta.</p>
+      </div>
+
+      <div class="column">
+        <div class="column-header">
+          <h2>Concluídas</h2>
+          <span class="badge" id="concluidasBadge">0</span>
+        </div>
+        <ul id="listaConcluidas"></ul>
+        <p class="empty" id="mensagemVaziaConcluidas" hidden>Nenhuma tarefa concluída.</p>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // Elementos da tela
+    const listaPendentes = document.getElementById('listaPendentes');
+    const listaConcluidas = document.getElementById('listaConcluidas');
+    const inputDescricao = document.getElementById('descricao');
+    const btnAdicionar = document.getElementById('btnAdicionar');
+    const mensagemVaziaPendentes = document.getElementById('mensagemVaziaPendentes');
+    const mensagemVaziaConcluidas = document.getElementById('mensagemVaziaConcluidas');
+    const pendentesBadge = document.getElementById('pendentesBadge');
+    const concluidasBadge = document.getElementById('concluidasBadge');
+
+    // Atualiza contadores das colunas
+    function atualizarResumo(pendentes, concluidas) {
+      pendentesBadge.textContent = String(pendentes.length);
+      concluidasBadge.textContent = String(concluidas.length);
+    }
+
+    // Habilita/desabilita botão adicionar
+    function controlarBotaoAdicionar() {
+      btnAdicionar.disabled = inputDescricao.value.trim().length === 0;
+    }
+
+    // Busca tarefas no backend e mostra na tela
+    async function carregarTarefas() {
+      const resposta = await fetch('/api/tarefas');
+      const tarefas = await resposta.json();
+      const pendentes = tarefas.filter((item) => !item.concluida);
+      const concluidas = tarefas.filter((item) => item.concluida);
+
+      atualizarResumo(pendentes, concluidas);
+
+      listaPendentes.innerHTML = '';
+      listaConcluidas.innerHTML = '';
+      mensagemVaziaPendentes.hidden = pendentes.length !== 0;
+      mensagemVaziaConcluidas.hidden = concluidas.length !== 0;
+
+      tarefas.forEach((tarefa) => {
+        const item = document.createElement('li');
+        item.className = 'task-item';
+
+        const info = document.createElement('div');
+        info.className = 'task-info';
+
+        const titulo = document.createElement('span');
+        titulo.className = `task-title ${tarefa.concluida ? 'done' : ''}`;
+        titulo.textContent = `#${tarefa.id} - ${tarefa.descricao}`;
+
+        const meta = document.createElement('span');
+        meta.className = 'meta';
+        const data = new Date(tarefa.dataCriacao).toLocaleString('pt-BR');
+        meta.textContent = `Criada em: ${data}`;
+
+        info.appendChild(titulo);
+        info.appendChild(meta);
+
+        const actions = document.createElement('div');
+        actions.className = 'actions';
+
+        if (!tarefa.concluida) {
+          const btnConcluir = document.createElement('button');
+          btnConcluir.className = 'btn-done';
+          btnConcluir.textContent = 'Concluir';
+          btnConcluir.addEventListener('click', async () => {
+            await fetch(`/api/tarefas/${tarefa.id}/concluir`, { method: 'PATCH' });
+            carregarTarefas();
+          });
+          actions.appendChild(btnConcluir);
+        }
+
+        const btnExcluir = document.createElement('button');
+        btnExcluir.className = 'btn-del';
+        btnExcluir.textContent = 'Excluir';
+        btnExcluir.addEventListener('click', async () => {
+          await fetch(`/api/tarefas/${tarefa.id}`, { method: 'DELETE' });
+          carregarTarefas();
+        });
+        actions.appendChild(btnExcluir);
+
+        item.appendChild(info);
+        item.appendChild(actions);
+
+        if (tarefa.concluida) {
+          listaConcluidas.appendChild(item);
+        } else {
+          listaPendentes.appendChild(item);
+        }
+      });
+    }
+
+    // Clique para adicionar nova tarefa
+    btnAdicionar.addEventListener('click', async () => {
+      const descricao = inputDescricao.value.trim();
+      if (!descricao) return;
+
+      btnAdicionar.disabled = true;
+
+      await fetch('/api/tarefas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ descricao })
+      });
+
+      inputDescricao.value = '';
+      inputDescricao.focus();
+      controlarBotaoAdicionar();
+      carregarTarefas();
+    });
+
+    // Permite adicionar tarefa pressionando Enter
+    inputDescricao.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        btnAdicionar.click();
+      }
+    });
+
+    inputDescricao.addEventListener('input', controlarBotaoAdicionar);
+
+    // Carrega as tarefas assim que a página abre
+    controlarBotaoAdicionar();
+    carregarTarefas();
+  </script>
+</body>
+</html>
